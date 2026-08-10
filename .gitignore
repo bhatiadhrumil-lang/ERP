@@ -1,0 +1,42 @@
+# ---- Dependencies ----
+node_modules/
+
+# ---- Build outputs ----
+dist/
+build/
+*.tsbuildinfo
+
+# ---- Environment / secrets (NEVER commit) ----
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!.env.test.example
+
+# ---- Logs ----
+*.log
+logs/
+npm-debug.log*
+
+# ---- Test / coverage ----
+coverage/
+.vitest/
+
+# ---- Editor / OS ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ---- Vite ----
+frontend/dist/
+.vite/
+
+# ---- Prisma ----
+backend/prisma/dev.db
+backend/prisma/*.db-journal
+
+# ---- Misc ----
+uploads/
+tmp/
