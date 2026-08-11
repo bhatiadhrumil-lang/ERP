@@ -1,16 +1,10 @@
 import { z } from 'zod';
-import { moneySchema, paginationQuerySchema } from './common.schema';
+import { moneySchema, optionalQueryBoolean, paginationQuerySchema } from './common.schema';
 
 export const productListQuerySchema = paginationQuerySchema.extend({
   category: z.string().trim().max(60).optional(),
-  isActive: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
-  lowStock: z
-    .enum(['true', 'false'])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  isActive: optionalQueryBoolean,
+  lowStock: optionalQueryBoolean,
 });
 
 export const createProductSchema = z

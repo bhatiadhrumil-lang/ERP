@@ -22,6 +22,20 @@ enum UserRole {
   ACCOUNTS
 }
 
+/**
+ * Application-side user lifecycle. Cognito owns credentials; this enum owns
+ * the ERP-side invitation state:
+ *  - INVITED  : admin created the Cognito identity, employee has not completed
+ *               first-time password setup yet
+ *  - ACTIVE   : onboarding completed (first authenticated request flips INVITED)
+ *  - DISABLED : admin disabled the account — app authorization rejects these
+ */
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
 enum CustomerType {
   RETAIL
   WHOLESALE
@@ -63,7 +77,12 @@ model User {
   name             String
   email            String               @unique
   role             UserRole
+  status           UserStatus           @default(ACTIVE)
   isActive         Boolean              @default(true)
+  // Dev-mode only: scrypt hash of the temp password for locally-created
+  // accounts (invites without AWS Cognito). Never selected into API responses.
+  // Null for real Cognito users — Cognito owns their credentials.
+  devPasswordHash  String?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 

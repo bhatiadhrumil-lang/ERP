@@ -1,4 +1,4 @@
-import type { UserRole } from '../types';
+import type { UserRole, UserStatus } from '../types';
 
 export interface NavItem {
   label: string;
@@ -25,6 +25,15 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   SALES: 'Sales',
   WAREHOUSE: 'Warehouse',
   ACCOUNTS: 'Accounts',
+};
+
+/** Roles an ADMIN can assign via the employee invitation form — ADMIN is deliberately absent. */
+export const INVITE_ROLES: Exclude<UserRole, 'ADMIN'>[] = ['SALES', 'WAREHOUSE', 'ACCOUNTS'];
+
+export const USER_STATUS_LABELS: Record<UserStatus, string> = {
+  INVITED: 'Invited',
+  ACTIVE: 'Active',
+  DISABLED: 'Disabled',
 };
 
 export const CUSTOMER_TYPE_LABELS: Record<string, string> = {
@@ -55,10 +64,3 @@ export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   IN: 'In',
   OUT: 'Out',
 };
-
-export const DEV_LOGIN_ACCOUNTS = [
-  { email: 'admin@mini-erp.local', label: 'Admin User' },
-  { email: 'sales@mini-erp.local', label: 'Rohan Verma (Sales)' },
-  { email: 'warehouse@mini-erp.local', label: 'Imran Shaikh (Warehouse)' },
-  { email: 'accounts@mini-erp.local', label: 'Priya Nair (Accounts)' },
-] as const;

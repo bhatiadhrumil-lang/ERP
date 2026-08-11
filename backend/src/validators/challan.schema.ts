@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { paginationQuerySchema } from './common.schema';
+import { optionalQueryEnum, optionalQueryUuid, paginationQuerySchema } from './common.schema';
 
 export const challanListQuerySchema = paginationQuerySchema.extend({
-  customerId: z.string().uuid('Invalid customer id').optional(),
-  status: z.enum(['DRAFT', 'CONFIRMED', 'CANCELLED']).optional(),
+  customerId: optionalQueryUuid,
+  status: optionalQueryEnum(['DRAFT', 'CONFIRMED', 'CANCELLED']),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 });

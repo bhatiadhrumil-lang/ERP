@@ -63,7 +63,7 @@ export function DashboardLayout() {
           );
         })}
       </nav>
-      <div className="border-t border-slate-800 px-5 py-3 text-[11px] text-slate-500">Mini ERP · Local Dev</div>
+      <div className="border-t border-slate-800 px-5 py-3 text-[11px] text-slate-500">Mini ERP</div>
     </aside>
   );
 

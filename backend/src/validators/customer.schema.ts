@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { emptyToNull, paginationQuerySchema } from './common.schema';
+import { emptyToNull, optionalQueryEnum, paginationQuerySchema } from './common.schema';
 
 export const customerListQuerySchema = paginationQuerySchema.extend({
-  customerType: z.enum(['RETAIL', 'WHOLESALE', 'DISTRIBUTOR']).optional(),
-  status: z.enum(['LEAD', 'ACTIVE', 'INACTIVE']).optional(),
+  customerType: optionalQueryEnum(['RETAIL', 'WHOLESALE', 'DISTRIBUTOR']),
+  status: optionalQueryEnum(['LEAD', 'ACTIVE', 'INACTIVE']),
 });
 
 export const createCustomerSchema = z

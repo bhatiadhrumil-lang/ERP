@@ -1,6 +1,7 @@
 // API domain types — mirror the backend response envelopes.
 
 export type UserRole = 'ADMIN' | 'SALES' | 'WAREHOUSE' | 'ACCOUNTS';
+export type UserStatus = 'INVITED' | 'ACTIVE' | 'DISABLED';
 export type CustomerType = 'RETAIL' | 'WHOLESALE' | 'DISTRIBUTOR';
 export type CustomerStatus = 'LEAD' | 'ACTIVE' | 'INACTIVE';
 export type FollowUpStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
@@ -21,6 +22,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  status: UserStatus;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -149,9 +151,4 @@ export interface RecentActivityItem {
   createdAt: string;
   movementType?: MovementType;
   status?: ChallanStatus;
-}
-
-export interface AuthSession {
-  token: string;
-  user: User;
 }

@@ -40,6 +40,15 @@ export function RoleBadge({ role }: { role: string }) {
   return <Badge tone={tone}>{role}</Badge>;
 }
 
+export function UserStatusBadge({ status }: { status: string }) {
+  const tone = status === 'ACTIVE' ? 'emerald' : status === 'INVITED' ? 'sky' : 'red';
+  return (
+    <Badge tone={tone}>
+      {status === 'ACTIVE' ? 'Active' : status === 'INVITED' ? 'Invited' : 'Disabled'}
+    </Badge>
+  );
+}
+
 export function MovementBadge({ type }: { type: string }) {
   return <Badge tone={type === 'IN' ? 'emerald' : 'red'}>{type === 'IN' ? 'IN' : 'OUT'}</Badge>;
 }

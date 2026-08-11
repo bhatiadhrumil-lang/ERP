@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { paginationQuerySchema, uuidSchema } from './common.schema';
+import { optionalQueryEnum, optionalQueryUuid, paginationQuerySchema, uuidSchema } from './common.schema';
 
 export const followUpListQuerySchema = paginationQuerySchema.extend({
-  status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
-  assignedToId: uuidSchema.optional(),
+  status: optionalQueryEnum(['PENDING', 'COMPLETED', 'CANCELLED']),
+  assignedToId: optionalQueryUuid,
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
 });

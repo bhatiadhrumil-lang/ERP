@@ -1,4 +1,4 @@
-import type { UserRole } from '@prisma/client';
+import type { UserRole, UserStatus } from '@prisma/client';
 
 /** The authenticated user attached to the request by the auth middleware. */
 export interface AuthenticatedUser {
@@ -7,6 +7,7 @@ export interface AuthenticatedUser {
   name: string;
   email: string;
   role: UserRole;
+  status: UserStatus;
 }
 
 /** Standard paginated list response shape. */

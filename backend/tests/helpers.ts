@@ -23,7 +23,10 @@ export interface TestUser {
   role: UserRole;
 }
 
-export async function createUser(role: UserRole, overrides: { name?: string; isActive?: boolean } = {}): Promise<TestUser> {
+export async function createUser(
+  role: UserRole,
+  overrides: { name?: string; isActive?: boolean; status?: 'INVITED' | 'ACTIVE' | 'DISABLED' } = {},
+): Promise<TestUser> {
   const n = next();
   const email = overrides.name ? `${overrides.name.toLowerCase().replace(/\s+/g, '-')}-${n}@test.local` : `${role.toLowerCase()}-${n}@test.local`;
   const user = await prisma.user.create({
@@ -32,6 +35,7 @@ export async function createUser(role: UserRole, overrides: { name?: string; isA
       name: overrides.name ?? role,
       email,
       role,
+      status: overrides.status ?? 'ACTIVE',
       isActive: overrides.isActive ?? true,
     },
   });

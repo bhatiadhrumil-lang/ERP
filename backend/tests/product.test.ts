@@ -114,4 +114,16 @@ describe('Product API', () => {
 
     expect(all.body.data.total).toBe(2);
   });
+
+  it('accepts empty-string isActive/lowStock filters ("All" selects)', async () => {
+    await createProduct('SKU-E-1', 10);
+
+    const res = await request(app)
+      .get('/api/products')
+      .set('Authorization', whAuth)
+      .query({ isActive: '', lowStock: '' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(1);
+  });
 });

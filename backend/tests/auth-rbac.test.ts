@@ -45,8 +45,8 @@ describe('Authentication & RBAC', () => {
       .get('/api/auth/me')
       .set('Authorization', `Bearer ${login.body.data.token}`);
     expect(me.status).toBe(200);
-    expect(me.body.data.email).toBe(user.email);
-    expect(me.body.data.role).toBe('SALES');
+    expect(me.body.data.user.email).toBe(user.email);
+    expect(me.body.data.user.role).toBe('SALES');
   });
 
   it('SALES can manage customers/challans but not users or inventory adjustments', async () => {
@@ -117,9 +117,8 @@ describe('Authentication & RBAC', () => {
     const admin = await createUser('ADMIN', { name: 'Admin' });
     const auth = `Bearer ${devTokenFor(admin)}`;
     const res = await request(app)
-      .patch(`/api/users/${admin.id}`)
-      .set('Authorization', auth)
-      .send({ isActive: false });
+      .post(`/api/users/${admin.id}/disable`)
+      .set('Authorization', auth);
     expect(res.status).toBe(409);
   });
 });

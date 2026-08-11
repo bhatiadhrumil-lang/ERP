@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import type { UserRole } from '@prisma/client';
 
 dotenv.config();
 
@@ -48,3 +49,56 @@ export const env = {
   /** Dev-login endpoint is mounted only when explicitly enabled and not in production */
   isDevAuthEnabled: !isProduction && parsed.data.DEV_AUTH_ENABLED !== 'false',
 } as const;
+
+/**
+ * Dev-mode invites: when dev auth is EXPLICITLY enabled (`DEV_AUTH_ENABLED=true`,
+ * i.e. the local demo setup), invitations skip the Cognito admin API (which
+ * needs AWS credentials) and create local accounts with a temp password shown
+ * to the admin. Read live at call time so tests can toggle it per-file.
+ */
+export function isDevInviteEnabled(): boolean {
+  return !isProduction && process.env.DEV_AUTH_ENABLED === 'true';
+}
+
+/**
+ * Live environment reads for settings that may change at runtime (used by the
+ * test suite to drive the authentication strategy and onboarding policy per
+ * test). Production reads the same variables — values are identical to the
+ * snapshotted env above under normal operation.
+ */
+
+/** AWS Cognito configuration as read at request time. */
+export function getCognitoConfig(): {
+  poolId?: string;
+  clientId?: string;
+  jwksUri?: string;
+} {
+  const poolId = process.env.COGNITO_USER_POOL_ID?.trim();
+  const clientId = process.env.COGNITO_CLIENT_ID?.trim();
+  return {
+    poolId: poolId || undefined,
+    clientId: clientId || undefined,
+    jwksUri: process.env.COGNITO_JWKS_URI?.trim() || undefined,
+  };
+}
+
+/**
+ * Onboarding policy for Cognito identities that have no matching application
+ * user yet:
+ *  - `admin` (default, safe): the identity is rejected until an administrator
+ *    provisions a user row (preferred for production).
+ *  - `auto`: a user row is created on first sign-in with
+ *    `getOnboardingDefaultRole()` (never ADMIN).
+ */
+export function getOnboardingPolicy(): 'admin' | 'auto' {
+  return process.env.USER_ONBOARDING === 'auto' ? 'auto' : 'admin';
+}
+
+/** Safe default role for auto-provisioned users — never ADMIN. */
+export function getOnboardingDefaultRole(): UserRole {
+  return process.env.USER_ONBOARDING_DEFAULT_ROLE === 'WAREHOUSE' ||
+    process.env.USER_ONBOARDING_DEFAULT_ROLE === 'ACCOUNTS' ||
+    process.env.USER_ONBOARDING_DEFAULT_ROLE === 'ADMIN'
+    ? (process.env.USER_ONBOARDING_DEFAULT_ROLE as UserRole)
+    : 'SALES';
+}

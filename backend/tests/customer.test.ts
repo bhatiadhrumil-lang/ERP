@@ -64,6 +64,18 @@ describe('Customer API', () => {
     expect(res.body.data.page).toBe(1);
   });
 
+  it('accepts empty-string status/customerType filters ("All" selects)', async () => {
+    await createCustomer('Alpha Traders');
+
+    const res = await request(app)
+      .get('/api/customers')
+      .set('Authorization', adminAuth)
+      .query({ status: '', customerType: '', limit: 5 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(1);
+  });
+
   it('updates an existing customer', async () => {
     const customer = await createCustomer('Gamma Stores');
 

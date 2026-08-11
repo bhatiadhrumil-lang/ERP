@@ -22,6 +22,7 @@ async function main(): Promise<void> {
       name: 'Admin User',
       email: 'admin@mini-erp.local',
       role: 'ADMIN',
+      status: 'ACTIVE',
     },
   });
 
@@ -33,6 +34,7 @@ async function main(): Promise<void> {
       name: 'Rohan Verma',
       email: 'sales@mini-erp.local',
       role: 'SALES',
+      status: 'ACTIVE',
     },
   });
 
@@ -44,6 +46,7 @@ async function main(): Promise<void> {
       name: 'Imran Shaikh',
       email: 'warehouse@mini-erp.local',
       role: 'WAREHOUSE',
+      status: 'ACTIVE',
     },
   });
 
@@ -55,6 +58,7 @@ async function main(): Promise<void> {
       name: 'Priya Nair',
       email: 'accounts@mini-erp.local',
       role: 'ACCOUNTS',
+      status: 'ACTIVE',
     },
   });
 

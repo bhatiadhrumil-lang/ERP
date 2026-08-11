@@ -52,10 +52,10 @@ services; validation lives in Zod schemas; route handlers stay thin.
 
 | Layer     | Tech |
 |-----------|------|
-| Frontend  | React 18, TypeScript (strict), Vite 6, Tailwind CSS 4, React Router 6, Axios, lucide-react |
-| Backend   | Node.js ≥ 20, TypeScript (strict), Express 4, Prisma 6, Zod 3, Helmet, CORS, jose (Cognito JWT), jsonwebtoken (dev tokens only) |
+| Frontend  | React 18, TypeScript (strict), Vite 6, Tailwind CSS 4, React Router 6, Axios, aws-amplify (Cognito), lucide-react |
+| Backend   | Node.js ≥ 20, TypeScript (strict), Express 4, Prisma 6, Zod 3, Helmet, CORS, aws-jwt-verify (Cognito JWT), jsonwebtoken (dev tokens only) |
 | Database  | PostgreSQL (local Docker image `postgres:16-alpine`, RDS-ready schema), Prisma migrations |
-| Testing   | Vitest + Supertest against an isolated `mini_erp_test` database |
+| Testing   | Vitest + Supertest (backend, isolated `mini_erp_test` DB) · Vitest + Testing Library (frontend, jsdom) |
 
 Money is stored as `Decimal(12,2)` — never floats.
 
@@ -79,12 +79,16 @@ npx prisma generate
 npx prisma migrate dev
 npx prisma db seed
 
-# 5. Run both apps
+# 5. Frontend environment (Cognito identifiers — public, not secrets)
+cp frontend/.env.example frontend/.env   # fill in the pool/client ids from §5
+
+# 6. Run both apps
 npm run dev              # backend :5000 + frontend :5173
 ```
 
-Open http://localhost:5173 and sign in with a seeded development user
-(see §9 for the account list).
+Open http://localhost:5173 and sign in with a **Cognito user** that has a
+matching `User` row (provisioned by `cognitoSub`). In development you can
+also exercise the backend API with the dev-login endpoint (see §9).
 
 ### Database without Docker
 
@@ -108,7 +112,27 @@ See `backend/.env.example`:
 | `DEV_JWT_SECRET` | Signs dev-only tokens; never needed in production |
 | `DEV_AUTH_ENABLED` | Default `true`; disables the dev login route when `false` |
 
-`.env` files are git-ignored. No secrets are committed.
+Cognito **admin operations** (invite / disable / enable / resend — see §9)
+use the AWS SDK default credential provider chain — no access keys live in
+the repo. Local development uses your configured AWS CLI profile/credentials
+(`~/.aws/credentials`); on EC2 the instance IAM role supplies them. The
+credentials must include the `cognito-idp:AdminCreateUser`,
+`AdminDisableUser`, `AdminEnableUser` and `AdminDeleteUser` permissions for
+the pool.
+
+Frontend (`frontend/.env.example` — copy to `frontend/.env`):
+
+| Variable | Purpose |
+|----------|---------|
+| `VITE_AWS_REGION` | Cognito user pool region (default `us-east-1`) |
+| `VITE_COGNITO_USER_POOL_ID` | Cognito User Pool ID (e.g. `us-east-1_AbCdEfGhI`) |
+| `VITE_COGNITO_CLIENT_ID` | Cognito App Client ID (public client, no secret) |
+| `VITE_COGNITO_ALLOW_SIGNUP` | Legacy flag (unused by the UI since onboarding moved to the first-ADMIN bootstrap + ADMIN invitations, §9) |
+| `VITE_API_BASE_URL` | Backend base URL (default `/api`, proxied by Vite in dev) |
+
+Cognito pool/client identifiers are **public** by design — they ship to the
+browser. Never commit `.env` files; only the `.env.example` templates are
+tracked.
 
 ## 6. Prisma commands
 
@@ -125,7 +149,9 @@ npx prisma studio            # browse the DB
 Eight core tables (Prisma is the source of truth — see
 `backend/prisma/schema.prisma`):
 
-1. **users** — id, cognitoSub (unique), name, email (unique), role, isActive
+1. **users** — id, cognitoSub (unique), name, email (unique), role, status
+   (INVITED/ACTIVE/DISABLED), isActive (derived convenience flag), createdAt,
+   updatedAt — no password fields, ever
 2. **customers** — customerCode (unique), name, mobile, email?, businessName,
    gstNumber?, customerType, status, address?, nextFollowUpDate?, notes?
 3. **customer_follow_ups** — customer, followUpDate, notes, status,
@@ -163,8 +189,14 @@ category/low-stock, challan status/customer/date range, movement type, …).
 |---|---|---|
 | GET `/api/health` | Health (ALB-ready) | public |
 | GET `/api/auth/me` | Current user | any authenticated |
+| GET `/api/auth/bootstrap-status` | Is the first ADMIN created? | public |
+| POST `/api/auth/bootstrap-admin` | First-ADMIN bootstrap (one-time, race-safe) | verified Cognito identity only |
 | POST `/api/auth/dev-login` | Dev-only sign-in (disabled in production) | public* |
-| GET/PATCH `/api/users`, `/api/users/:id` | User management | ADMIN |
+| GET/PATCH `/api/users`, `/api/users/:id` | User list (page/search/role/status filter) / name update | ADMIN |
+| POST `/api/users/invite` | Invite employee (SALES/WAREHOUSE/ACCOUNTS only) | ADMIN |
+| PATCH `/api/users/:id/role` | Change role (last-ADMIN protected) | ADMIN |
+| POST `/api/users/:id/disable` · `.../enable` | Disable/enable (last-ADMIN protected) | ADMIN |
+| POST `/api/users/:id/resend-invitation` | Re-send Cognito invitation (INVITED only) | ADMIN |
 | GET/POST `/api/customers`, GET/PATCH/DELETE `/api/customers/:id` | CRM | admin+sales (read: +accounts) |
 | GET/POST `/api/customers/:customerId/followups` | Follow-ups | admin+sales |
 | GET/PATCH `/api/followups`, `/api/followups/:id` | Follow-up hub | admin+sales |
@@ -207,30 +239,91 @@ Cancellation: `DRAFT → CANCELLED` (no stock effect) or
 `CONFIRMED → CANCELLED` with compensating `IN` movements that restore stock.
 History is never silently mutated.
 
-## 9. Development authentication approach
+## 9. Authentication & onboarding
 
-- **Production:** `authenticate` resolves the token via the Cognito JWKS
-  (`RS256`, issuer + audience checked). The app **refuses to start** in
-  `NODE_ENV=production` without `COGNITO_USER_POOL_ID`/`COGNITO_CLIENT_ID`.
-  Confirmed by test: a validly-signed dev token gets **401** in production.
-- **Development:** the backend issues its own short-lived HS256 token for a
-  seeded user through `POST /api/auth/dev-login` (email only — no passwords).
-  This route is **not mounted** when `DEV_AUTH_ENABLED=false`, and the dev
-  verifier is never used in production. User `role`/`isActive` are always read
-  from the database on each request, so permission changes apply immediately.
+Cognito owns **identity** (email, password, verification, invitations,
+temporary passwords, sessions). PostgreSQL owns the **ERP user** (role,
+status, active/inactive, application authorization). The two are joined by
+`User.cognitoSub` — email is never the identity relationship.
 
-Seeded sign-in accounts (development only — placeholder Cognito subs,
-marked `DEVELOPMENT SEED USER` in `prisma/seed.ts`):
+```
+React (Amplify) ──signIn / confirmSignIn──▶ AWS Cognito User Pool
+   │  Cognito session (access token; nothing persisted to localStorage)
+   ▼
+Express authenticate middleware (aws-jwt-verify, RS256 + JWKS)
+   │  sub → User.cognitoSub → role/status/isActive from PostgreSQL
+   ▼
+GET /api/auth/me  →  { user: { name, email, role, status, isActive, ... } }
+```
 
-| Email | Role |
-|---|---|
-| admin@mini-erp.local | ADMIN |
-| sales@mini-erp.local | SALES |
-| warehouse@mini-erp.local | WAREHOUSE |
-| accounts@mini-erp.local | ACCOUNTS |
+### Onboarding model
 
-In production, Cognito owns credentials end-to-end; the `User` row is
-provisioned by `cognitoSub` out-of-band (documented in the deployment plan).
+- **First ADMIN (bootstrap).** Before any ADMIN exists, `GET
+  /api/auth/bootstrap-status` reports `initialized: false` and the UI shows
+  `/signup` (name/email/password — **no role field**). The flow is: Cognito
+  `signUp` → verify the emailed code → sign in. At sign-in the backend calls
+  `POST /api/auth/bootstrap-admin`, which verifies the Cognito token, then
+  creates the `User` row with `role: ADMIN` inside a transaction guarded by a
+  Postgres advisory lock — exactly **one** ADMIN can ever be created this
+  way, even under concurrency. After bootstrap, `bootstrap-admin` returns
+  `409 ADMIN_ALREADY_INITIALIZED` and the `/signup` page shows a
+  "managed by an administrator" screen. The backend enforces this — hiding
+  the form in the UI is only UX.
+- **Employees (invitations only).** Public employee registration does not
+  exist. An ADMIN calls `POST /api/users/invite` (role must be
+  SALES/WAREHOUSE/ACCOUNTS — **ADMIN is not a valid invite role**). The
+  backend verifies the ADMIN JWT, calls Cognito `AdminCreateUser`, which
+  emails the invitation with a temporary password, then creates the `User`
+  row with `status: INVITED`. No password ever passes through the
+  application.
+- **First login (NEW_PASSWORD_REQUIRED).** The invited employee signs in
+  with the temporary password; Cognito answers with the
+  `NEW_PASSWORD_REQUIRED` challenge. The UI shows "Set your new password"
+  (new + confirm) and completes the challenge via Amplify
+  `confirmSignIn`. On the first authenticated request afterwards the backend
+  flips `status: INVITED → ACTIVE`.
+- **User lifecycle.** ADMIN can change roles, disable, enable and re-send
+  invitations. `status` transitions: `INVITED → ACTIVE` (onboarding),
+  `ACTIVE → DISABLED` / `DISABLED → ACTIVE` (admin). A `DISABLED` user is
+  rejected by the middleware even if Cognito authentication succeeds —
+  `403 USER_DISABLED`. The final ADMIN can never be disabled or demoted
+  (server-side guard; self-demotion that would leave zero ADMINS is
+  rejected with `409 LAST_ADMIN`).
+- **Cognito admin operations** run exclusively in
+  `backend/src/services/cognitoAdminService.ts` (AWS SDK v3, default
+  credential chain). The frontend never calls `AdminCreateUser` /
+  `AdminDisableUser` / `AdminEnableUser` / `AdminDeleteUser` — it only talks
+  to the backend API. Cognito Groups are **not** used for roles; PostgreSQL
+  is the single source of authorization state.
+
+### Audit logging
+
+Every admin user-management action writes a structured audit line (via the
+existing logger): actor, action (`user.invite`, `user.role_change`,
+`user.disable`, `user.enable`, `user.resend_invitation`), target email,
+role, timestamp. No passwords or tokens are ever logged.
+
+### Consistency strategy (app DB ↔ Cognito)
+
+- **Invite:** Cognito `AdminCreateUser` first (gets the `sub`), then the
+  `User` row; if the DB insert fails, the Cognito user is deleted as
+  compensation.
+- **Disable/enable:** the application database is updated **first** — it is
+  the authorization authority, so even if the Cognito call fails the user is
+  locked out of the app. Cognito failures are logged; state is re-synced on
+  the next admin action.
+
+### Development
+
+- The backend still offers `POST /api/auth/dev-login` (email only, HS256,
+  not mounted when `DEV_AUTH_ENABLED=false`, never in production) for API
+  testing. The web app always signs in through Cognito.
+- Cognito admin operations need working AWS credentials locally (see §5).
+  The test suite mocks the AWS SDK completely — it never touches AWS.
+- Seeded users (`prisma/seed.ts`) act as the dev "first ADMIN" plus three
+  employees — they are `ACTIVE`, so `bootstrap-status` returns `true` in a
+  freshly seeded dev database. To exercise the bootstrap flow, reset the DB
+  without seeding.
 
 ## 10. AWS deployment plan (later phase — documented, not executed)
 
@@ -263,16 +356,25 @@ no CodePipeline, no S3 deploy, no public RDS access, no hardcoded credentials.
 ## Testing
 
 ```bash
-npm test                    # vitest (backend) — 38 tests
+npm test                      # backend: vitest + supertest — 54 tests
+npm test --prefix frontend    # frontend: vitest + Testing Library — auth flows
+npm run typecheck             # backend + frontend TypeScript (strict)
 ```
 
-The suite runs against `mini_erp_test` (migrations applied automatically by
-the Vitest global setup; every test starts from a clean database) and covers:
-customer CRUD + validation, product CRUD + low-stock filter, inventory
-adjustments, the full challan lifecycle, the **stock 100 → challan 20 →
-inventory 80 / OUT 20 / CONFIRMED** invariant, the **120-unit rejection with
-full rollback** invariant, snapshot preservation, RBAC denials per role, and
-dashboard endpoints.
+The backend suite runs against `mini_erp_test` (migrations applied
+automatically by the Vitest global setup; every test starts from a clean
+database) and covers: customer CRUD + validation, product CRUD + low-stock
+filter, inventory adjustments, the full challan lifecycle, the
+**stock 100 → challan 20 → inventory 80 / OUT 20 / CONFIRMED** invariant,
+the **120-unit rejection with full rollback** invariant, snapshot
+preservation, RBAC denials per role, dashboard endpoints, and **Cognito JWT
+verification** (real RS256 tokens minted in-test against an ephemeral key,
+plus expired/bad-signature/wrong-audience rejections).
+
+The frontend suite runs in jsdom with the Amplify/auth services mocked and
+covers: unauthenticated redirect to `/login`, authenticated access to the
+dashboard, logout returning to a protected login, and the Cognito sign-in
+flow (credentials validation, success, and failure messages).
 
 ## Project structure
 
@@ -293,12 +395,14 @@ dashboard endpoints.
 └── frontend/
     ├── src/
     │   ├── components/ui/  cards, buttons, fields, badges, modals, tables, feedback
-    │   ├── pages/          login, dashboard, customers(+detail), followups,
-    │   │                   products, inventory(+movements), challans(new/detail), users
+    │   ├── pages/          login, register, confirm-signup, dashboard, customers(+detail),
+    │   │                   followups, products, inventory(+movements), challans(new/detail), users
     │   ├── layouts/        sidebar + topbar shell
-    │   ├── hooks/          auth context (dev-login) · toast notifications
-    │   ├── services/       typed Axios clients per domain
+    │   ├── hooks/          auth context (Cognito session + ERP user) · toast notifications
+    │   ├── services/       typed Axios clients per domain + apiClient (Bearer auth, 401 retry)
+    │   ├── config/         Amplify/Cognito init (once) + feature flags
     │   ├── routes/         protected + role-gated routing
+    │   ├── test/           jsdom auth tests (Amplify mocked)
     │   └── utils/          formatting + constants (nav, RBAC mirror, labels)
     └── vite.config.ts      dev proxy :5173 → :5000
 ```

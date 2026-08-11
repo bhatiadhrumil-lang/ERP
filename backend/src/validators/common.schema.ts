@@ -33,6 +33,36 @@ export const emptyToNull = (max: number) =>
     .optional()
     .transform((v) => (v === '' ? null : v));
 
+/**
+ * Optional enum QUERY parameter: an explicit '' (what an "All/Any" select
+ * sends) is treated as absent, so list endpoints accept `?status=` without
+ * failing validation. Missing keys stay undefined; invalid non-empty values
+ * are still rejected.
+ *
+ * The cast restores the literal union: zod widens to `string` when the enum
+ * tuple arrives through a generic parameter.
+ */
+export const optionalQueryEnum = <const T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(values as unknown as [string, ...string[]]).optional(),
+  ) as z.ZodType<T[number] | undefined>;
+
+/** Optional UUID QUERY parameter: an explicit '' is treated as absent. */
+export const optionalQueryUuid = z.preprocess((v) => (v === '' ? undefined : v), uuidSchema.optional());
+
+/**
+ * Optional boolean QUERY parameter ('true'/'false'): '' or missing is treated
+ * as absent; present values are coerced to real booleans.
+ */
+export const optionalQueryBoolean = z.preprocess(
+  (v) => (v === '' || v === undefined ? undefined : v),
+  z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
+);
+
 /** Money with at most 2 decimal places (fits Decimal(12,2)). */
 export const moneySchema = z
   .number()
